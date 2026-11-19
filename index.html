@@ -605,6 +605,10 @@
                     <div class="card-value text-info" id="dash-profit">₹0</div>
                 </div>
                 <div class="card">
+                    <div class="card-title">Passive Income (প্যাসিভ আয়)</div>
+                    <div class="card-value text-success" id="dash-passive">₹0</div>
+                </div>
+                <div class="card">
                     <div class="card-title">Days Recorded (মোট দিন)</div>
                     <div class="card-value text-info" id="dash-active-days" style="color: var(--primary) !important;">0 Days</div>
                 </div>
@@ -645,13 +649,23 @@
                             <label>Note / Details (Optional)</label>
                             <input type="text" id="f-note" placeholder="Any additional notes...">
                         </div>
+                    </div>
+
+                    <!-- ===== PASSIVE INCOME (Profit Only) ===== -->
+                    <div class="form-group" style="background: linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(16,185,129,0.02) 100%); border: 1px solid rgba(16,185,129,0.3); padding: 14px 16px; border-radius: var(--radius-sm); margin-bottom: 20px;">
+                        <label style="color: var(--success); display: flex; align-items: center; gap: 6px;">💰 Passive Income (প্যাসিভ আয় - শুধু লাভ)</label>
+                        <input type="number" inputmode="decimal" id="f-passive-income" step="0.01" min="0" placeholder="Enter passive profit amount (optional)" oninput="calculateFormMargin()" style="background: var(--surface);">
+                        <small style="font-size: 0.78rem; color: var(--text-muted); margin-top: 6px; display: block;">Only profit — no sale amount needed. This will be added to your total profit.</small>
+                    </div>
+
+                    <div class="form-grid">
                         <div class="form-group">
-                            <label>Total Sale Amount (₹) *</label>
-                            <input type="number" inputmode="decimal" id="f-sale" step="0.01" min="0.01" required placeholder="0.00" oninput="calculateFormMargin()" autofocus>
+                            <label>Total Sale Amount (₹)</label>
+                            <input type="number" inputmode="decimal" id="f-sale" step="0.01" min="0" placeholder="0.00" oninput="calculateFormMargin()" autofocus>
                         </div>
                         <div class="form-group">
-                            <label>Profit Amount (₹) *</label>
-                            <input type="number" inputmode="decimal" id="f-profit" step="0.01" min="0" required placeholder="0.00" oninput="calculateFormMargin()">
+                            <label>Profit Amount (₹)</label>
+                            <input type="number" inputmode="decimal" id="f-profit" step="0.01" min="0" placeholder="0.00" oninput="calculateFormMargin()">
                         </div>
                         <div class="form-group">
                             <label>Margin</label>
@@ -793,6 +807,7 @@
                             <th>Month</th>
                             <th>Sales</th>
                             <th>Gross Profit</th>
+                            <th>Passive Income</th>
                             <th>Expenses</th>
                             <th>Withdrawals</th>
                             <th>Net Balance</th>
@@ -1010,6 +1025,12 @@
         return ''; 
     }
 
+    // Helper: extract timestamp safely from an id (works for ids with suffix like "1234567890P")
+    function idToTime(id) {
+        if (!id) return 0;
+        return parseInt(String(id).replace(/\D/g, '')) || 0;
+    }
+
     // --- Helper Function to Focus Sale Input & Trigger Keyboard ---
     let needsKeyboardOnWake = true;
 
@@ -1017,7 +1038,6 @@
         if (currentTab === 'add-sale') {
             const saleInput = document.getElementById('f-sale');
             if (saleInput) {
-                // Blur and re-focus trick to wake up mobile keyboard
                 saleInput.blur();
                 saleInput.focus();
                 setTimeout(() => {
@@ -1028,7 +1048,6 @@
         }
     }
 
-    // 1. Trigger when Brave Browser is restored from minimize (visibilitychange)
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
             needsKeyboardOnWake = true;
@@ -1036,7 +1055,6 @@
         }
     });
 
-    // 2. Trigger when window regains focus or page is shown
     window.addEventListener('focus', () => {
         needsKeyboardOnWake = true;
         focusSaleInput();
@@ -1046,7 +1064,6 @@
         focusSaleInput();
     });
 
-    // 3. Fallback for Brave/Chrome security: touching ANYWHERE on empty space after minimize immediately pops up keyboard
     document.addEventListener('touchstart', (e) => {
         if (needsKeyboardOnWake && currentTab === 'add-sale') {
             needsKeyboardOnWake = false;
@@ -1058,7 +1075,6 @@
         }
     }, {passive: true});
 
-    // Focus immediately on DOMContentLoaded for faster response on page load
     document.addEventListener('DOMContentLoaded', () => {
         if ((sessionStorage.getItem('spt_activeTab') || 'add-sale') === 'add-sale') {
             const saleInput = document.getElementById('f-sale');
@@ -1092,10 +1108,7 @@
         handleFilterChange();
         renderRecentSales();
 
-        // Restore tab on refresh, default 'add-sale' on new start
         navTo(currentTab);
-        
-        // Re-ensure focus after async DB operations complete
         focusSaleInput();
 
         document.addEventListener('keydown', function(e) {
@@ -1110,7 +1123,6 @@
             let storedSales = await dbGet('spt_salesData');
             let storedExp = await dbGet('spt_expenseData');
             
-            // Auto Migration from old localStorage to IndexedDB
             if (!storedSales && localStorage.getItem('spt_salesData')) {
                 storedSales = JSON.parse(localStorage.getItem('spt_salesData'));
                 dbSet('spt_salesData', storedSales);
@@ -1197,7 +1209,7 @@
 
     function navTo(tabId) {
         currentTab = tabId;
-        sessionStorage.setItem('spt_activeTab', tabId); // Save for refresh
+        sessionStorage.setItem('spt_activeTab', tabId);
 
         document.querySelectorAll('.section').forEach(sec => sec.classList.remove('active'));
         const section = document.getElementById(tabId);
@@ -1214,10 +1226,8 @@
         else if (tabId === 'monthly') { header.style.display = 'flex'; title.innerText = 'Monthly Summary & Net Balance'; renderMonthlySummary(); }
         else { header.style.display = 'none'; }
 
-        // Scroll to top on tab switch
         window.scrollTo({ top: 0, behavior: 'smooth' });
 
-        // Auto-focus Total Sale Amount when switching to Add Sale tab or on initial load
         if (tabId === 'add-sale') {
             focusSaleInput();
         }
@@ -1235,7 +1245,6 @@
         document.getElementById('more-sheet').classList.remove('open');
         document.body.style.overflow = '';
     }
-    // Allow closing the sheet with the back gesture / overlay tap
     document.addEventListener('click', (e) => {
         const overlay = document.getElementById('more-sheet');
         if (overlay.classList.contains('open') && e.target === overlay) {
@@ -1282,35 +1291,61 @@
         }
     }
 
-    // --- Core Logic: SALES ---
+    // --- Core Logic: SALES (with Passive Income) ---
     function saveSale(e) {
         e.preventDefault();
         const date = document.getElementById('f-date').value;
-        const saleAmt = parseFloat(document.getElementById('f-sale').value);
-        const profitAmt = parseFloat(document.getElementById('f-profit').value);
+        const saleAmt = parseFloat(document.getElementById('f-sale').value) || 0;
+        const profitAmt = parseFloat(document.getElementById('f-profit').value) || 0;
+        const passiveAmt = parseFloat(document.getElementById('f-passive-income').value) || 0;
         const note = document.getElementById('f-note').value.trim();
 
-        if (!date || isNaN(saleAmt) || isNaN(profitAmt)) return showToast('Please fill required fields', 'error');
-        if (saleAmt <= 0) return showToast('Sale amount must be > 0', 'error');
-        if (profitAmt < 0 || profitAmt > saleAmt) return showToast('Invalid Profit Amount', 'error');
-
-        const saleObj = { id: editingId || Date.now().toString(), date, saleAmount: saleAmt, profitAmount: profitAmt, note };
+        if (!date) return showToast('Please select a date', 'error');
+        if (saleAmt <= 0 && passiveAmt <= 0) return showToast('Enter a sale amount or passive income', 'error');
+        if (saleAmt > 0 && (isNaN(profitAmt) || profitAmt < 0 || profitAmt > saleAmt)) return showToast('Invalid Profit Amount', 'error');
+        if (passiveAmt < 0) return showToast('Invalid Passive Income', 'error');
 
         if (editingId) {
             const idx = salesData.findIndex(s => s.id === editingId);
-            if(idx > -1) salesData[idx] = {...salesData[idx], ...saleObj};
-            showToast('Sale updated successfully');
+            if (idx > -1) {
+                const existing = salesData[idx];
+                if (existing.isPassiveIncome) {
+                    if (passiveAmt > 0) {
+                        salesData[idx] = { ...existing, date, saleAmount: 0, profitAmount: passiveAmt, note: note || 'Passive Income' };
+                        if (saleAmt > 0) {
+                            salesData.push({ id: Date.now().toString(), date, saleAmount: saleAmt, profitAmount: profitAmt, note });
+                        }
+                        showToast('Passive income updated');
+                    } else if (saleAmt > 0) {
+                        salesData[idx] = { id: existing.id, date, saleAmount: saleAmt, profitAmount: profitAmt, note };
+                        showToast('Converted to sale & updated');
+                    } else {
+                        return showToast('Enter sale amount or passive income', 'error');
+                    }
+                } else {
+                    if (saleAmt <= 0) return showToast('Sale amount must be > 0', 'error');
+                    salesData[idx] = { ...existing, date, saleAmount: saleAmt, profitAmount: profitAmt, note };
+                    if (passiveAmt > 0) {
+                        salesData.push({ id: Date.now().toString() + 'P', date, saleAmount: 0, profitAmount: passiveAmt, note: note || 'Passive Income', isPassiveIncome: true });
+                    }
+                    showToast('Sale updated successfully');
+                }
+            }
         } else {
-            salesData.push(saleObj);
-            showToast('Sale saved successfully');
+            if (saleAmt > 0) {
+                salesData.push({ id: Date.now().toString(), date, saleAmount: saleAmt, profitAmount: profitAmt, note });
+            }
+            if (passiveAmt > 0) {
+                salesData.push({ id: Date.now().toString() + 'P', date, saleAmount: 0, profitAmount: passiveAmt, note: note || 'Passive Income', isPassiveIncome: true });
+            }
+            showToast(saleAmt > 0 && passiveAmt > 0 ? 'Sale & Passive Income saved' : (saleAmt > 0 ? 'Sale saved' : 'Passive Income saved'));
         }
 
         saveDataToStorage();
         saveState();
-
         resetForm('sale-form');
-        applyFilterAndRender(); 
-        renderRecentSales(); 
+        applyFilterAndRender();
+        renderRecentSales();
         focusSaleInput();
         checkAutoBackup();
     }
@@ -1321,24 +1356,32 @@
         editingId = sale.id;
         document.getElementById('f-date').value = sale.date;
         document.getElementById('f-note').value = sale.note || '';
-        document.getElementById('f-sale').value = sale.saleAmount;
-        document.getElementById('f-profit').value = sale.profitAmount;
-        
-        document.getElementById('form-title').innerText = 'Edit Sale';
-        document.getElementById('btn-save').innerText = 'Update Sale';
+
+        if (sale.isPassiveIncome) {
+            document.getElementById('f-passive-income').value = sale.profitAmount;
+            document.getElementById('f-sale').value = '';
+            document.getElementById('f-profit').value = '';
+            document.getElementById('form-title').innerText = 'Edit Passive Income';
+        } else {
+            document.getElementById('f-passive-income').value = '';
+            document.getElementById('f-sale').value = sale.saleAmount;
+            document.getElementById('f-profit').value = sale.profitAmount;
+            document.getElementById('form-title').innerText = 'Edit Sale';
+        }
+
+        document.getElementById('btn-save').innerText = 'Update';
         calculateFormMargin();
         navTo('add-sale');
-        
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
     function deleteSale(id) {
-        if (!confirm('Are you sure you want to delete this sale?')) return;
+        if (!confirm('Are you sure you want to delete this entry?')) return;
         salesData = salesData.filter(s => s.id !== id);
         saveDataToStorage();
         saveState();
 
-        showToast('Sale deleted successfully');
+        showToast('Entry deleted successfully');
         applyFilterAndRender();
         renderRecentSales(); 
         checkAutoBackup();
@@ -1503,28 +1546,32 @@
     }
 
     function calculateDashboard() {
-        let totalSales = 0, grossProfit = 0, busExpenses = 0, withdrawals = 0;
-        
-        filteredData.forEach(s => { totalSales += s.saleAmount; grossProfit += s.profitAmount; });
+        let totalSales = 0, grossProfit = 0, passiveIncome = 0, busExpenses = 0, withdrawals = 0;
+
+        filteredData.forEach(s => {
+            if (s.isPassiveIncome) passiveIncome += s.profitAmount;
+            else { totalSales += s.saleAmount; grossProfit += s.profitAmount; }
+        });
         filteredExpenseData.forEach(e => {
-            if(e.category === 'Personal Withdrawal') withdrawals += e.amount;
+            if (e.category === 'Personal Withdrawal') withdrawals += e.amount;
             else busExpenses += e.amount;
         });
 
-        const netBalance = grossProfit - busExpenses - withdrawals;
+        const totalProfit = grossProfit + passiveIncome;
+        const netBalance = totalProfit - busExpenses - withdrawals;
         const profitMargin = totalSales > 0 ? (grossProfit / totalSales) * 100 : 0;
 
         let uniqueDays = new Set();
         filteredData.forEach(s => uniqueDays.add(s.date));
         filteredExpenseData.forEach(e => uniqueDays.add(e.date));
-        
+
         let activeDaysCount = uniqueDays.size;
         let calcDays = activeDaysCount || 1;
-        
-        let avgProfit = (grossProfit / calcDays) * 30;
+        let avgProfit = (totalProfit / calcDays) * 30;
 
         document.getElementById('dash-sales').innerText = currencyFmt.format(totalSales);
         document.getElementById('dash-profit').innerText = currencyFmt.format(grossProfit);
+        document.getElementById('dash-passive').innerText = currencyFmt.format(passiveIncome);
         document.getElementById('dash-active-days').innerText = activeDaysCount + (activeDaysCount <= 1 ? ' Day' : ' Days');
         document.getElementById('dash-expenses').innerText = currencyFmt.format(busExpenses);
         document.getElementById('dash-withdrawal').innerText = currencyFmt.format(withdrawals);
@@ -1533,14 +1580,14 @@
         document.getElementById('dash-avg-profit').innerText = currencyFmt.format(avgProfit);
     }
 
-    // --- Rendering ---
+    // --- Rendering: Recent Sales ---
     function renderRecentSales() {
         const tbody = document.getElementById('recent-sales-body');
-        if(!tbody) return;
+        if (!tbody) return;
 
         let recentData = [...salesData].sort((a, b) => {
             const diff = new Date(b.date) - new Date(a.date);
-            return diff !== 0 ? diff : b.id - a.id;
+            return diff !== 0 ? diff : idToTime(b.id) - idToTime(a.id);
         }).slice(0, 3);
 
         if (recentData.length === 0) {
@@ -1550,14 +1597,25 @@
         let html = '';
         recentData.forEach(s => {
             const isMerged = s.note === "Daily Summary (Auto-merged)";
+            const isPassive = !!s.isPassiveIncome;
             const timeStr = isMerged ? '' : getEntryTime(s.id);
             const timeHtml = timeStr ? `<div style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">${timeStr}</div>` : '';
-            
+
+            const saleDisplay = isPassive
+                ? '<span style="color:var(--success); font-weight:700; font-size:0.82rem;">💰 Passive</span>'
+                : currencyFmt.format(s.saleAmount);
+            const profitClass = isPassive ? 'text-success' : 'text-info';
+
+            let noteDisplay;
+            if (isMerged) noteDisplay = `<span style="color:var(--success); font-size:0.85rem; font-weight:700; background:rgba(16,185,129,0.1); padding:4px 8px; border-radius:12px;">${s.note}</span>`;
+            else if (isPassive) noteDisplay = `<span style="color:var(--success); font-weight:600;">${s.note || 'Passive Income'}</span>`;
+            else noteDisplay = `<span>${s.note || '-'}</span>`;
+
             html += `<tr class="card-row">
                 <td data-label="Date"><span><strong style="color:var(--text-main); font-weight:600;">${s.date}</strong>${timeHtml}</span></td>
-                <td data-label="Sale" style="font-weight:600;">${currencyFmt.format(s.saleAmount)}</td>
-                <td data-label="Profit" class="text-info" style="font-weight:700;">${currencyFmt.format(s.profitAmount)}</td>
-                <td data-label="Note"><span style="${isMerged ? 'color:var(--success); font-size:0.85rem; font-weight:700; background:rgba(16,185,129,0.1); padding:4px 8px; border-radius:12px;' : ''}">${s.note || '-'}</span></td>
+                <td data-label="Sale" style="font-weight:600;">${saleDisplay}</td>
+                <td data-label="Profit" class="${profitClass}" style="font-weight:700;">${currencyFmt.format(s.profitAmount)}</td>
+                <td data-label="Note">${noteDisplay}</td>
                 <td data-label="Actions">
                     <div class="action-btns-container">
                         <button type="button" class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem;" onclick="editSale('${s.id}')">Edit</button>
@@ -1569,7 +1627,7 @@
         tbody.innerHTML = html;
     }
 
-    // --- Date Accordion Toggle Function ---
+    // --- Date Accordion Toggle ---
     function toggleDateGroup(groupId, iconId) {
         const rows = document.querySelectorAll(`.${groupId}`);
         const icon = document.getElementById(iconId);
@@ -1590,56 +1648,56 @@
         }
     }
 
-    // --- Updated Sales History Render (Grouped by Date, Collapsed by default) ---
+    // --- Sales History (Grouped by Date) ---
     function renderHistoryTable() {
         const tbody = document.getElementById('history-body');
         const term = document.getElementById('search-input')?.value.toLowerCase() || '';
         const sortType = document.getElementById('sort-sales')?.value || 'date-desc';
-        
-        let data = filteredData.filter(s => 
-            s.date.includes(term) || 
+
+        let data = filteredData.filter(s =>
+            s.date.includes(term) ||
             (s.note && s.note.toLowerCase().includes(term)) ||
-            s.saleAmount.toString().includes(term)
+            s.saleAmount.toString().includes(term) ||
+            s.profitAmount.toString().includes(term)
         );
 
         data.sort((a, b) => {
-            if(sortType === 'time-desc') return b.id - a.id;
-            if(sortType === 'time-asc') return a.id - b.id;
-            if(sortType === 'date-desc') {
+            if (sortType === 'time-desc') return idToTime(b.id) - idToTime(a.id);
+            if (sortType === 'time-asc') return idToTime(a.id) - idToTime(b.id);
+            if (sortType === 'date-desc') {
                 const diff = new Date(b.date) - new Date(a.date);
-                return diff !== 0 ? diff : b.id - a.id;
+                return diff !== 0 ? diff : idToTime(b.id) - idToTime(a.id);
             }
-            if(sortType === 'date-asc') {
+            if (sortType === 'date-asc') {
                 const diff = new Date(a.date) - new Date(b.date);
-                return diff !== 0 ? diff : a.id - b.id;
+                return diff !== 0 ? diff : idToTime(a.id) - idToTime(b.id);
             }
-            if(sortType === 'amount-desc') return b.saleAmount - a.saleAmount;
-            if(sortType === 'amount-asc') return a.saleAmount - b.saleAmount;
+            if (sortType === 'amount-desc') return b.saleAmount - a.saleAmount;
+            if (sortType === 'amount-asc') return a.saleAmount - b.saleAmount;
             return 0;
         });
 
         if (data.length === 0) return tbody.innerHTML = `<tr><td colspan="6" class="empty-state"><h3>No Sales Found</h3><p>Try adjusting your search or date filter.</p></td></tr>`;
-        
+
         const groupedData = {};
-        data.forEach(s => {
-            if(!groupedData[s.date]) groupedData[s.date] = [];
-            groupedData[s.date].push(s);
-        });
+        data.forEach(s => { if (!groupedData[s.date]) groupedData[s.date] = []; groupedData[s.date].push(s); });
 
         let sortedDates = Object.keys(groupedData);
-        if (sortType === 'date-asc' || sortType === 'time-asc') {
-            sortedDates.sort((a, b) => new Date(a) - new Date(b));
-        } else {
-            sortedDates.sort((a, b) => new Date(b) - new Date(a));
-        }
+        if (sortType === 'date-asc' || sortType === 'time-asc') sortedDates.sort((a, b) => new Date(a) - new Date(b));
+        else sortedDates.sort((a, b) => new Date(b) - new Date(a));
 
         let html = '';
         sortedDates.forEach((date) => {
             const groupId = `sales-group-${date.replace(/-/g, '')}`;
             const iconId = `icon-${groupId}`;
-            
-            let daySales = 0, dayProfit = 0;
-            groupedData[date].forEach(s => { daySales += s.saleAmount; dayProfit += s.profitAmount; });
+
+            let daySales = 0, dayProfit = 0, dayPassive = 0;
+            groupedData[date].forEach(s => {
+                if (s.isPassiveIncome) dayPassive += s.profitAmount;
+                else { daySales += s.saleAmount; dayProfit += s.profitAmount; }
+            });
+
+            const passiveTag = dayPassive > 0 ? ` | Passive: ${currencyFmt.format(dayPassive)}` : '';
 
             html += `<tr class="date-header-row" onclick="toggleDateGroup('${groupId}', '${iconId}')">
                 <td colspan="6">
@@ -1649,24 +1707,36 @@
                             <span>${date}</span>
                         </div>
                         <div style="font-size: 0.9rem; font-weight: 600; background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 20px;">
-                            Total Sale: ${currencyFmt.format(daySales)} | Profit: ${currencyFmt.format(dayProfit)}
+                            Total Sale: ${currencyFmt.format(daySales)} | Profit: ${currencyFmt.format(dayProfit + dayPassive)}${passiveTag}
                         </div>
                     </div>
                 </td>
             </tr>`;
 
             groupedData[date].forEach(s => {
-                const margin = s.saleAmount > 0 ? ((s.profitAmount/s.saleAmount)*100).toFixed(2) : 0;
+                const isPassive = !!s.isPassiveIncome;
                 const isMerged = s.note === "Daily Summary (Auto-merged)";
+                const margin = s.saleAmount > 0 ? ((s.profitAmount / s.saleAmount) * 100).toFixed(2) : 0;
                 const timeStr = isMerged ? '' : getEntryTime(s.id);
                 const timeHtml = timeStr ? `<div style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">${timeStr}</div>` : '';
-                
+
+                const saleDisplay = isPassive
+                    ? '<span style="color:var(--success); font-weight:700; font-size:0.82rem;">💰 Passive</span>'
+                    : currencyFmt.format(s.saleAmount);
+                const profitClass = isPassive ? 'text-success' : 'text-info';
+                const marginDisplay = isPassive ? '<span style="color:var(--text-muted);">—</span>' : `<span style="font-weight:600; color:var(--text-muted);">${margin}%</span>`;
+
+                let noteDisplay;
+                if (isMerged) noteDisplay = `<span style="color:var(--success); font-size:0.85rem; font-weight:700; background:rgba(16,185,129,0.1); padding:4px 8px; border-radius:12px;">${s.note}</span>`;
+                else if (isPassive) noteDisplay = `<span style="color:var(--success); font-weight:600;">${s.note || 'Passive Income'}</span>`;
+                else noteDisplay = `<span>${s.note || '-'}</span>`;
+
                 html += `<tr class="${groupId} child-row card-row group-hidden">
                     <td data-label="Date"><span><strong style="color:var(--text-main); font-weight:600;">${s.date}</strong>${timeHtml}</span></td>
-                    <td data-label="Sale" style="font-weight:600;">${currencyFmt.format(s.saleAmount)}</td>
-                    <td data-label="Profit" class="text-info" style="font-weight:700;">${currencyFmt.format(s.profitAmount)}</td>
-                    <td data-label="Margin"><span style="font-weight:600; color:var(--text-muted);">${margin}%</span></td>
-                    <td data-label="Note"><span style="${isMerged ? 'color:var(--success); font-size:0.85rem; font-weight:700; background:rgba(16,185,129,0.1); padding:4px 8px; border-radius:12px;' : ''}">${s.note || '-'}</span></td>
+                    <td data-label="Sale" style="font-weight:600;">${saleDisplay}</td>
+                    <td data-label="Profit" class="${profitClass}" style="font-weight:700;">${currencyFmt.format(s.profitAmount)}</td>
+                    <td data-label="Margin">${marginDisplay}</td>
+                    <td data-label="Note">${noteDisplay}</td>
                     <td data-label="Actions">
                         <div class="action-btns-container">
                             <button class="btn btn-outline" style="padding:6px 12px; font-size:0.8rem;" onclick="editSale('${s.id}')">Edit</button>
@@ -1679,7 +1749,7 @@
         tbody.innerHTML = html;
     }
 
-    // --- Updated Expense Ledger Render (Grouped by Date, Collapsed by default) ---
+    // --- Expense Ledger (Grouped by Date) ---
     function renderExpenseTable() {
         const tbody = document.getElementById('expense-body');
         const term = document.getElementById('exp-search-input')?.value.toLowerCase() || '';
@@ -1769,34 +1839,37 @@
         tbody.innerHTML = html;
     }
 
+    // --- Monthly Summary ---
     function renderMonthlySummary() {
         const tbody = document.getElementById('monthly-body');
         const months = {};
-        
+
         filteredData.forEach(s => {
-            const key = s.date.substring(0,7);
-            if(!months[key]) months[key] = { sales:0, profit:0, expenses:0, withdrawal:0 };
-            months[key].sales += s.saleAmount; months[key].profit += s.profitAmount;
+            const key = s.date.substring(0, 7);
+            if (!months[key]) months[key] = { sales: 0, profit: 0, passive: 0, expenses: 0, withdrawal: 0 };
+            if (s.isPassiveIncome) months[key].passive += s.profitAmount;
+            else { months[key].sales += s.saleAmount; months[key].profit += s.profitAmount; }
         });
 
         filteredExpenseData.forEach(e => {
-            const key = e.date.substring(0,7);
-            if(!months[key]) months[key] = { sales:0, profit:0, expenses:0, withdrawal:0 };
-            if(e.category === 'Personal Withdrawal') months[key].withdrawal += e.amount;
+            const key = e.date.substring(0, 7);
+            if (!months[key]) months[key] = { sales: 0, profit: 0, passive: 0, expenses: 0, withdrawal: 0 };
+            if (e.category === 'Personal Withdrawal') months[key].withdrawal += e.amount;
             else months[key].expenses += e.amount;
         });
 
-        if(Object.keys(months).length === 0) return tbody.innerHTML = `<tr><td colspan="6" class="empty-state"><h3>No Summary Data</h3><p>No records found for the selected filter.</p></td></tr>`;
+        if (Object.keys(months).length === 0) return tbody.innerHTML = `<tr><td colspan="7" class="empty-state"><h3>No Summary Data</h3><p>No records found for the selected filter.</p></td></tr>`;
 
         let html = '';
         Object.keys(months).sort().reverse().forEach(k => {
             const m = months[k];
             const d = new Date(k + '-01');
-            const net = m.profit - m.expenses - m.withdrawal;
+            const net = m.profit + m.passive - m.expenses - m.withdrawal;
             html += `<tr class="card-row">
                 <td data-label="Month"><strong style="color:var(--text-main); font-weight:600;">${d.toLocaleString('default', { month: 'long', year: 'numeric' })}</strong></td>
                 <td data-label="Sales" style="font-weight:600;">${currencyFmt.format(m.sales)}</td>
                 <td data-label="Profit" class="text-info" style="font-weight:600;">${currencyFmt.format(m.profit)}</td>
+                <td data-label="Passive" class="text-success" style="font-weight:600;">${currencyFmt.format(m.passive)}</td>
                 <td data-label="Expenses" class="text-danger" style="font-weight:600;">${currencyFmt.format(m.expenses)}</td>
                 <td data-label="Withdrawal" class="text-warning" style="font-weight:600;">${currencyFmt.format(m.withdrawal)}</td>
                 <td data-label="Net" class="text-success" style="font-weight:800; font-size: 1.1rem;">${currencyFmt.format(net)}</td>
@@ -1833,18 +1906,20 @@
     }
 
     function exportCSV() {
-        let csv = 'Date,Time,Sale Amount,Profit Amount,Note\n';
+        let csv = 'Date,Time,Type,Sale Amount,Profit Amount,Note\n';
         salesData.forEach(s => {
             const isMerged = s.note === "Daily Summary (Auto-merged)";
+            const isPassive = !!s.isPassiveIncome;
             const timeStr = isMerged ? 'Summary' : getEntryTime(s.id);
+            const type = isMerged ? 'Summary' : (isPassive ? 'Passive Income' : 'Sale');
             const safeNote = s.note ? s.note.replace(/"/g, '""') : '';
-            csv += `${s.date},${timeStr},${s.saleAmount},${s.profitAmount},"${safeNote}"\n`;
+            csv += `${s.date},${timeStr},${type},${s.saleAmount},${s.profitAmount},"${safeNote}"\n`;
         });
-        
-        const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
-        link.download = `Sales_${getTimestampString()}.csv`; 
+        link.download = `Sales_${getTimestampString()}.csv`;
         link.click();
         setTimeout(() => URL.revokeObjectURL(link.href), 100);
     }
@@ -1938,24 +2013,20 @@
     // --- SWIPE & PINCH-TO-ZOOM LOGIC ---
     const tabsOrder = ['dashboard', 'add-sale', 'add-expense', 'history', 'expense-history', 'monthly', 'settings'];
     
-    // Swipe Variables
     let touchstartX = 0;
     let touchendX = 0;
     let touchstartY = 0;
     let touchendY = 0;
     
-    // Pinch Zoom Variables
     let pinchInitialDist = 0;
     let pinchInitialZoom = 1;
     let appCurrentScale = parseFloat(localStorage.getItem('spt_ui_zoom')) || 1;
     
-    // Apply saved zoom immediately
     if(appCurrentScale !== 1) {
         document.body.style.zoom = appCurrentScale;
     }
 
     document.addEventListener('touchstart', e => {
-        // Pinch Zoom Start
         if (e.touches.length === 2) {
             pinchInitialDist = Math.hypot(
                 e.touches[0].pageX - e.touches[1].pageX,
@@ -1965,7 +2036,6 @@
             return;
         }
 
-        // Swipe Start (Single Touch)
         if(e.touches.length === 1) {
             if(e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
             if(e.target.closest('.table-responsive')) return;
@@ -1979,7 +2049,6 @@
     }, {passive: false});
 
     document.addEventListener('touchmove', e => {
-        // Pinch Zooming
         if (e.touches.length === 2) {
             if (e.cancelable) e.preventDefault(); 
             const currentDist = Math.hypot(
@@ -1998,7 +2067,6 @@
     }, {passive: false});
 
     document.addEventListener('touchend', e => {
-        // Pinch Zoom End
         if (pinchInitialDist > 0) {
             if (e.touches.length < 2) {
                 pinchInitialDist = 0;
@@ -2007,7 +2075,6 @@
             return; 
         }
 
-        // Swipe End (Single Touch)
         if(e.changedTouches.length === 1) {
             if(e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
             if(e.target.closest('.table-responsive')) return; 
